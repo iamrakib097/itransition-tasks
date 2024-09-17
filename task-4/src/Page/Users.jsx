@@ -2,16 +2,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { getUsers } from "../services/getUsersApi";
 import { formatTimestamp } from "../utils/helpers";
+import DeleteConfirmationModal from "../ui/DeleteConfirmationModal";
 import supabase from "../config/supabaseConfig";
 import useCurrentUser from "../useCurrentUser";
 import Loading from "../ui/Loading";
+import block from "../assets/block.svg";
+import unblock from "../assets/unblock.svg";
 
 const Users = () => {
   const queryClient = useQueryClient();
   const loggedInUser = useCurrentUser();
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: getUsers,
   });
@@ -31,72 +35,86 @@ const Users = () => {
           ),
       ]);
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setShowDeleteModal(false);
+      setSelectedUsers([]);
+    },
+    onError: (error) => {
+      console.error("Delete users error:", error);
+    },
   });
 
-  const handleCheckboxChange = (user) => {
-    setSelectedUsers((prevSelectedUsers) => {
-      if (prevSelectedUsers.some((u) => u.id === user.id)) {
-        return prevSelectedUsers.filter((u) => u.id !== user.id);
-      } else {
-        return [...prevSelectedUsers, user];
-      }
-    });
-  };
-
-  const handleBlockUsers = async () => {
-    try {
-      const { data, error } = await supabase
+  const { mutate: blockUsers, isLoading: isBlocking } = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
         .from("users")
         .update({ status: "Blocked" })
         .in(
           "id",
           selectedUsers.map((user) => user.id)
         );
-
       if (error) throw error;
-      console.log("Blocked users:", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       setSelectedUsers([]);
-    } catch (error) {
-      console.error("Error blocking users:", error.message);
-    }
-  };
+    },
+    onError: (error) => {
+      console.error("Block users error:", error);
+    },
+  });
 
-  const handleUnlockUsers = async () => {
-    try {
-      const { data, error } = await supabase
+  const { mutate: unblockingUsers, isLoading: isUnblocking } = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
         .from("users")
         .update({ status: "Active" })
         .in(
           "id",
           selectedUsers.map((user) => user.id)
         );
-
       if (error) throw error;
-      console.log("Unlocked users:", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       setSelectedUsers([]);
-    } catch (error) {
-      console.error("Error unlocking users:", error.message);
-    }
-  };
+    },
+    onError: (error) => {
+      console.error("Unblock users error:", error);
+    },
+  });
 
-  const handleDeleteUsers = async () => {
-    deleteUsers(
-      selectedUsers.map((user) => user.id),
-      {
-        onSuccess(data) {
-          console.log("delete users susccess", data);
-          queryClient.invalidateQueries({
-            queryKey: ["users"],
-          });
-        },
-        onError(error) {
-          console.log("delete users error", error);
-        },
-      }
+  const handleCheckboxChange = (user) => {
+    setSelectedUsers((prevSelectedUsers) =>
+      prevSelectedUsers.some((u) => u.id === user.id)
+        ? prevSelectedUsers.filter((u) => u.id !== user.id)
+        : [...prevSelectedUsers, user]
     );
   };
 
-  if (isLoading) return <p>Loading....</p>;
+  const handleBlockUsers = () => {
+    blockUsers();
+  };
+
+  const handleUnlockUsers = () => {
+    unblockingUsers();
+  };
+
+  const handleDeleteUsers = () => {
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = () => {
+    deleteUsers();
+  };
+
+  const handleSignOut = () => {
+    supabase.auth.signOut();
+  };
+
+  if (isLoading) return <Loading />;
+  if (isBlocking || isDeletingUsers || isUnblocking) return <p>Loading...</p>;
 
   const filteredUsers =
     data?.map((u) => ({
@@ -106,105 +124,119 @@ const Users = () => {
 
   return (
     <div>
-      <div className="sticky px-5 py-6 bg-blue-200 w-screen h-[40px] flex justify-end items-center gap-6">
-        <div>
-          Hello,
-          <span className="text-blue-500">
-            {isLoading ? <Loading /> : loggedInUser?.name}
+      {showDeleteModal && (
+        <DeleteConfirmationModal
+          onConfirm={confirmDelete}
+          onCancel={() => setShowDeleteModal(false)}
+          isDeleting={isDeletingUsers}
+        />
+      )}
+
+      <div className="sticky top-0 px-5 py-4 bg-gray-900 w-full flex justify-between items-center shadow-md z-50">
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-medium text-gray-300">Welcome,</span>
+          <span className="text-lg font-semibold text-white">
+            {loggedInUser?.name}
           </span>
         </div>
         <button
-          className="text-blue-500"
-          onClick={() => {
-            supabase.auth.signOut();
-          }}
+          className="text-white bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg transition-all duration-200 ease-in-out shadow-md inline-flex justify-center items-center"
+          onClick={handleSignOut}
         >
           Logout
         </button>
       </div>
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-xl font-bold">User Registry</h1>
-          <div className="flex items-center space-x-2">
+
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-semibold">User Registry</h1>
+          <div className="flex items-center space-x-4">
             <button
-              className="bg-gray-300 p-2 rounded hover:bg-gray-400"
+              className="bg-gray-300 p-2 rounded hover:bg-gray-100 flex gap-2 active:scale-90 transition-all duration-300 ease-in-out transform"
               onClick={handleBlockUsers}
               disabled={selectedUsers.length === 0}
             >
+              <img src={block} alt="Block" width={24} height={24} />
               Block
             </button>
             <button
-              className="bg-gray-300 p-2 rounded hover:bg-gray-400"
+              className="bg-gray-300 p-2 rounded hover:bg-gray-100 flex gap-2 active:scale-90 transition-all duration-300 ease-in-out transform"
               onClick={handleUnlockUsers}
               disabled={selectedUsers.length === 0}
             >
-              Unlock
+              <img src={unblock} alt="Unblock" width={24} height={24} />
+              Unblock
             </button>
             <button
-              className="bg-red-400 p-2 rounded hover:bg-red-500"
+              className="bg-red-400 p-2 rounded hover:bg-red-100 active:scale-90 transition-all duration-300 ease-in-out transform"
               onClick={handleDeleteUsers}
-              disabled={selectedUsers.length === 0 || isDeletingUsers}
+              disabled={selectedUsers.length === 0}
             >
               Delete
             </button>
           </div>
         </div>
 
-        {/* User Table */}
-        <table className="min-w-full border-collapse">
-          <thead>
-            <tr className="border-b">
-              <th className="p-2 text-left">
-                <input
-                  type="checkbox"
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedUsers(
-                        data.filter((u) => u.auth_id !== loggedInUser?.auth_id)
-                      ); // Select all users
-                    } else {
-                      setSelectedUsers([]); // Deselect all users
-                    }
-                  }}
-                  checked={selectedUsers.length === data?.length - 1}
-                />
-              </th>
-              <th className="p-2 text-left">Name</th>
-              <th className="p-2 text-left">Position</th>
-              <th className="p-2 text-left">Email</th>
-              <th className="p-2 text-left">Last Login</th>
-              <th className="p-2 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredUsers.map((user, index) => (
-              <tr key={index} className="border-b">
-                <td className="p-2">
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="min-w-full bg-white">
+            <thead className="bg-gray-100 border-b">
+              <tr>
+                <th className="p-4 text-left">
                   <input
-                    disabled={user.isCurrent}
                     type="checkbox"
-                    onChange={() => handleCheckboxChange(user)}
-                    checked={selectedUsers.some((u) => u.id === user.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedUsers(
+                          data.filter(
+                            (u) => u.auth_id !== loggedInUser?.auth_id
+                          )
+                        );
+                      } else {
+                        setSelectedUsers([]);
+                      }
+                    }}
+                    checked={selectedUsers.length === data?.length - 1}
                   />
-                </td>
-                <td className="p-2">{user.name}</td>
-                <td className="p-2">{user.position}</td>
-                <td className="p-2">{user.email}</td>
-                <td className="p-2">{formatTimestamp(user.last_login)}</td>
-                <td
-                  className={`p-2 ${
-                    user.status === "Blocked"
-                      ? "text-red-500"
-                      : "text-green-500"
-                  }`}
-                >
-                  {user.status}
-                </td>
+                </th>
+                <th className="p-4 text-left">Name</th>
+                <th className="p-4 text-left">Position</th>
+                <th className="p-4 text-left">Email</th>
+                <th className="p-4 text-left">Last Login</th>
+                <th className="p-4 text-left">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredUsers.map((user, index) => (
+                <tr
+                  key={index}
+                  className="border-b hover:bg-gray-50 transition-all"
+                >
+                  <td className="p-4">
+                    <input
+                      disabled={user.isCurrent}
+                      type="checkbox"
+                      onChange={() => handleCheckboxChange(user)}
+                      checked={selectedUsers.some((u) => u.id === user.id)}
+                    />
+                  </td>
+                  <td className="p-4">{user.name}</td>
+                  <td className="p-4">{user.position}</td>
+                  <td className="p-4">{user.email}</td>
+                  <td className="p-4">{formatTimestamp(user.last_login)}</td>
+                  <td
+                    className={`p-4 font-semibold ${
+                      user.status === "Blocked"
+                        ? "text-red-500"
+                        : "text-green-500"
+                    }`}
+                  >
+                    {user.status}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

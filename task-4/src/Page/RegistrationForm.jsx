@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
-import supabase from "../config/supabaseConfig"; // Adjust the path if necessary
+import supabase from "../config/supabaseConfig";
 import { useState } from "react";
-
+import { useNavigate } from "react-router-dom";
 const RegistrationForm = () => {
   const {
     register,
@@ -9,15 +9,15 @@ const RegistrationForm = () => {
     formState: { errors },
     watch,
   } = useForm();
+  const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState(""); // For confirmation message
+  const [successMessage, setSuccessMessage] = useState("");
   const password = watch("password");
 
   async function onSubmit(data) {
     try {
       const { name, email, password, position } = data;
 
-      // Sign up the user with Supabase Auth and request email confirmation
       const { data: signUpData, error: signUpError } =
         await supabase.auth.signUp({
           email,
@@ -28,7 +28,6 @@ const RegistrationForm = () => {
         throw new Error(signUpError.message || "Error during sign-up.");
       }
 
-      // Show a success message to notify the user to check their email for confirmation
       setSuccessMessage(
         "Registration successful! Please check your email to confirm your account."
       );
@@ -53,38 +52,36 @@ const RegistrationForm = () => {
           .single();
 
         if (updateError) {
-          console.error("Insert Error:", updateError); // Log the full error
+          console.error("Insert Error:", updateError);
           throw new Error(`Error updating delted user: ${updateError.message}`);
         }
 
         console.log("User registered successfully:", updatedUser);
       } else {
-        // Insert user details into the 'users' table (optional)
-        // You can also choose to insert user data after they confirm their email.
         const { data: newUser, error: insertError } = await supabase
           .from("users")
           .insert([
             {
-              name, // Insert name
+              name,
               email,
               role: "admin",
-              position, // Add position to the table if required
-              last_login: null, // Initially set to null
+              position,
+              last_login: null,
               status: "Active",
-              registration_time: new Date(), // Default is handled by the database
+              registration_time: new Date(),
             },
           ])
           .single();
 
         if (insertError) {
-          console.error("Insert Error:", insertError); // Log the full error
+          console.error("Insert Error:", insertError);
           throw new Error(`Error inserting new user: ${insertError.message}`);
         }
 
         console.log("User registered successfully:", newUser);
       }
     } catch (error) {
-      setErrorMessage(error.message); // Set error message if registration fails
+      setErrorMessage(error.message);
     }
   }
 
@@ -203,7 +200,10 @@ const RegistrationForm = () => {
 
         <div className="mt-6 text-sm text-gray-600 ">
           Have an account?
-          <button className="text-blue-500 hover:underline ml-4">
+          <button
+            className="text-blue-500 hover:underline ml-4"
+            onClick={() => navigate("/login")}
+          >
             Login here &rarr;
           </button>
         </div>

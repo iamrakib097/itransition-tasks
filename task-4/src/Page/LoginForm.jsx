@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useState } from "react";
-import supabase from "../config/supabaseConfig"; // Adjust the path if necessary
+import supabase from "../config/supabaseConfig";
 
 async function signInWithEmail(data) {
   const mail = data.email;
@@ -34,8 +34,8 @@ async function signInWithEmail(data) {
     }
     const { error: updateError } = await supabase
       .from("users")
-      .update({ last_login: new Date().toISOString() }) // Set last_login to the current timestamp
-      .eq("id", user.id); // Ensure we update the correct user
+      .update({ last_login: new Date().toISOString() })
+      .eq("id", user.id);
 
     if (updateError) {
       throw new Error("Failed to update last login time");
@@ -47,7 +47,7 @@ async function signInWithEmail(data) {
 
 const LoginForm = () => {
   const navigate = useNavigate();
-  const [errorMessage, setErrorMessage] = useState(""); // State for error messages
+  const [errorMessage, setErrorMessage] = useState("");
   const {
     register,
     handleSubmit,
@@ -56,10 +56,10 @@ const LoginForm = () => {
 
   async function onSubmit(data) {
     try {
-      await signInWithEmail(data); // Await the sign-in process
-      navigate("/users"); // Navigate after successful sign-in
+      await signInWithEmail(data);
+      navigate("/users");
     } catch (error) {
-      setErrorMessage(error.message); // Set error message if sign-in fails
+      setErrorMessage(error.message);
     }
   }
 
@@ -121,7 +121,10 @@ const LoginForm = () => {
 
         <div className="mt-6 text-sm text-gray-600">
           New user?{" "}
-          <button className="text-blue-500 hover:underline ml-4">
+          <button
+            className="text-blue-500 hover:underline ml-4"
+            onClick={() => navigate("/registration")}
+          >
             Register here &rarr;
           </button>
         </div>
