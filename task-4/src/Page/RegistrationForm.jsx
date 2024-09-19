@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import supabase from "../config/supabaseConfig";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 const RegistrationForm = () => {
   const {
     register,
@@ -18,46 +19,65 @@ const RegistrationForm = () => {
     try {
       const { name, email, password, position } = data;
 
-      const { data: signUpData, error: signUpError } =
-        await supabase.auth.signUp({
-          email,
-          password,
-        });
+      // Check if a user with the same email exists and is_deleted is FALSE
+      const { data: existingUser, error: existingUserError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email)
+        .eq("is_deleted", false)
+        .single();
 
-      if (signUpError) {
-        throw new Error(signUpError.message || "Error during sign-up.");
+      if (existingUser) {
+        setErrorMessage("A user with this email already exists.");
+        return;
       }
 
-      setSuccessMessage(
-        "Registration successful! Please check your email to confirm your account."
-      );
-
-      const { data: deletedUserInfo } = await supabase
+      // Check if a user exists with is_deleted as TRUE
+      const { data: deletedUserInfo, error: deletedUserError } = await supabase
         .from("users")
         .select("*")
         .eq("email", email)
         .eq("is_deleted", true)
-        .limit(1)
         .single();
 
       if (deletedUserInfo) {
+        // Reactivate the deleted user
         const { data: updatedUser, error: updateError } = await supabase
           .from("users")
-          .update([
-            {
-              is_deleted: false,
-            },
-          ])
+          .update({
+            is_deleted: false,
+          })
           .eq("id", deletedUserInfo.id)
           .single();
 
         if (updateError) {
-          console.error("Insert Error:", updateError);
-          throw new Error(`Error updating delted user: ${updateError.message}`);
+          console.error("Update Error:", updateError);
+          throw new Error(
+            `Error updating deleted user: ${updateError.message}`
+          );
         }
 
-        console.log("User registered successfully:", updatedUser);
+        setSuccessMessage(
+          "Account reactivated! Please check your email to confirm your account."
+        );
+        console.log("User reactivated successfully:", updatedUser);
       } else {
+        // Proceed with the signup process
+        const { data: signUpData, error: signUpError } =
+          await supabase.auth.signUp({
+            email,
+            password,
+          });
+
+        if (signUpError) {
+          throw new Error(signUpError.message || "Error during sign-up.");
+        }
+
+        setSuccessMessage(
+          "Registration successful! Please check your email to confirm your account."
+        );
+
+        // Insert the new user into the users table
         const { data: newUser, error: insertError } = await supabase
           .from("users")
           .insert([
@@ -68,6 +88,7 @@ const RegistrationForm = () => {
               position,
               last_login: null,
               status: "Active",
+              is_deleted: false,
               registration_time: new Date(),
             },
           ])
