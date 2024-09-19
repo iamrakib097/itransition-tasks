@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getUsers } from "../services/getUsersApi";
 import { formatTimestamp } from "../utils/helpers";
 import DeleteConfirmationModal from "../ui/DeleteConfirmationModal";
@@ -8,9 +8,11 @@ import useCurrentUser from "../useCurrentUser";
 import Loading from "../ui/Loading";
 import block from "../assets/block.svg";
 import unblock from "../assets/unblock.svg";
+import { useNavigate } from "react-router-dom";
 
 const Users = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate(); // For redirection
   const loggedInUser = useCurrentUser();
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -22,22 +24,42 @@ const Users = () => {
 
   const { mutate: deleteUsers, isLoading: isDeletingUsers } = useMutation({
     mutationFn: async () => {
-      await Promise.all([
-        ...selectedUsers.map((user) =>
-          supabase.auth.admin.deleteUser(user.auth_id, true)
-        ),
-        supabase
+      if (
+        selectedUsers.some((user) => user.auth_id === loggedInUser?.auth_id)
+      ) {
+        // Sign out the logged-in user
+        await supabase.auth.signOut();
+
+        // Handle account deletion after sign-out
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay to ensure sign-out is processed
+
+        await supabase
           .from("users")
           .update({ is_deleted: true })
           .in(
             "id",
             selectedUsers.map((user) => user.id)
+          );
+      } else {
+        // Proceed with deletion for other users
+        await Promise.all([
+          ...selectedUsers.map((user) =>
+            supabase.auth.admin.deleteUser(user.auth_id, true)
           ),
-      ]);
+          supabase
+            .from("users")
+            .update({ is_deleted: true })
+            .in(
+              "id",
+              selectedUsers.map((user) => user.id)
+            ),
+        ]);
+      }
     },
     onSuccess: () => {
+      // Redirect to login after successful deletion
+      navigate("/login");
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      setShowDeleteModal(false);
       setSelectedUsers([]);
     },
     onError: (error) => {
@@ -57,6 +79,11 @@ const Users = () => {
       if (error) throw error;
     },
     onSuccess: () => {
+      if (
+        selectedUsers.some((user) => user.auth_id === loggedInUser?.auth_id)
+      ) {
+        supabase.auth.signOut().then(() => navigate("/login")); // Redirect to login page
+      }
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setSelectedUsers([]);
     },
@@ -77,6 +104,11 @@ const Users = () => {
       if (error) throw error;
     },
     onSuccess: () => {
+      if (
+        selectedUsers.some((user) => user.auth_id === loggedInUser?.auth_id)
+      ) {
+        supabase.auth.signOut().then(() => navigate("/login")); // Redirect to login page
+      }
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setSelectedUsers([]);
     },
@@ -110,8 +142,22 @@ const Users = () => {
   };
 
   const handleSignOut = () => {
-    supabase.auth.signOut();
+    supabase.auth.signOut().then(() => navigate("/login")); // Redirect to login page
   };
+
+  useEffect(() => {
+    if (loggedInUser) {
+      const currentUserStatus = data?.find(
+        (user) => user.auth_id === loggedInUser.auth_id
+      );
+      if (
+        currentUserStatus &&
+        (currentUserStatus.status === "Blocked" || currentUserStatus.is_deleted)
+      ) {
+        supabase.auth.signOut().then(() => navigate("/login"));
+      }
+    }
+  }, [data, loggedInUser, navigate]);
 
   if (isLoading) return <Loading />;
   if (isBlocking || isDeletingUsers || isUnblocking) return <p>Loading...</p>;
@@ -154,7 +200,10 @@ const Users = () => {
             <button
               className="bg-gray-300 p-2 rounded hover:bg-gray-100 flex gap-2 active:scale-90 transition-all duration-300 ease-in-out transform"
               onClick={handleBlockUsers}
-              disabled={selectedUsers.length === 0}
+              disabled={
+                selectedUsers.length === 0
+                // selectedUsers.some((user) => user.isCurrent)
+              }
             >
               <img src={block} alt="Block" width={24} height={24} />
               Block
@@ -170,7 +219,10 @@ const Users = () => {
             <button
               className="bg-red-400 p-2 rounded hover:bg-red-100 active:scale-90 transition-all duration-300 ease-in-out transform"
               onClick={handleDeleteUsers}
-              disabled={selectedUsers.length === 0}
+              disabled={
+                selectedUsers.length === 0
+                // selectedUsers.some((user) => user.isCurrent)
+              }
             >
               Delete
             </button>
@@ -188,14 +240,16 @@ const Users = () => {
                       if (e.target.checked) {
                         setSelectedUsers(
                           data.filter(
-                            (u) => u.auth_id !== loggedInUser?.auth_id
+                            (u) =>
+                              u.auth_id !== loggedInUser?.auth_id ||
+                              u.auth_id === loggedInUser?.auth_id
                           )
                         );
                       } else {
                         setSelectedUsers([]);
                       }
                     }}
-                    checked={selectedUsers.length === data?.length - 1}
+                    checked={selectedUsers.length === data?.length}
                   />
                 </th>
                 <th className="p-4 text-left">Name</th>
@@ -213,14 +267,14 @@ const Users = () => {
                 >
                   <td className="p-4">
                     <input
-                      disabled={user.isCurrent}
+                      // disabled={user.isCurrent}
                       type="checkbox"
                       onChange={() => handleCheckboxChange(user)}
                       checked={selectedUsers.some((u) => u.id === user.id)}
                     />
                   </td>
                   <td className="p-4">{user.name}</td>
-                  <td className="p-4">{user.position}</td>
+                  <td className="p-4">{user.position ? user.position : "-"}</td>
                   <td className="p-4">{user.email}</td>
                   <td className="p-4">{formatTimestamp(user.last_login)}</td>
                   <td

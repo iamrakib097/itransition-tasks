@@ -73,9 +73,7 @@ const RegistrationForm = () => {
           throw new Error(signUpError.message || "Error during sign-up.");
         }
 
-        setSuccessMessage(
-          "Registration successful! Please check your email to confirm your account."
-        );
+        setSuccessMessage("Registration successful! You can now Log in...");
 
         // Insert the new user into the users table
         const { data: newUser, error: insertError } = await supabase
