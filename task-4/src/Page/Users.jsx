@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 
 const Users = () => {
   const queryClient = useQueryClient();
-  const navigate = useNavigate(); // For redirection
+  const navigate = useNavigate();
   const loggedInUser = useCurrentUser();
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -27,11 +27,9 @@ const Users = () => {
       if (
         selectedUsers.some((user) => user.auth_id === loggedInUser?.auth_id)
       ) {
-        // Sign out the logged-in user
         await supabase.auth.signOut();
 
-        // Handle account deletion after sign-out
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay to ensure sign-out is processed
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         await supabase
           .from("users")
@@ -41,7 +39,6 @@ const Users = () => {
             selectedUsers.map((user) => user.id)
           );
       } else {
-        // Proceed with deletion for other users
         await Promise.all([
           ...selectedUsers.map((user) =>
             supabase.auth.admin.deleteUser(user.auth_id, true)
