@@ -1,47 +1,51 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import axios from "axios";
 
 export default function DataTable({ seed, region, errorCount }) {
   const [data, setData] = useState([]);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (newPage) => {
+    setLoading(true);
+    console.log(`Fetching data for page: ${newPage}`); // Log the page being fetched
     try {
       const response = await axios.get(
         "https://itransition-task-5-api.vercel.app/generate",
         {
-          params: { seed, page, region, errorCount },
+          params: {
+            seed: `${seed}-${region}`,
+            page: newPage,
+            region,
+            errorCount,
+          },
         }
       );
-      setData((prevData) => [...prevData, ...response.data]); // Append new data
+      console.log("Response data:", response.data); // Log the response data
+      setData((prevData) => [...prevData, ...response.data]);
     } catch (error) {
       console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    setData([]); // Clear data when seed, region, or errorCount changes
-    setPage(0); // Reset page
-    fetchData(); // Fetch new data
+    setData([]);
+    setPage(0);
+    fetchData(0);
   }, [seed, region, errorCount]);
 
   const exportToCSV = () => {
     const csvRows = [];
-    // Add header row
     csvRows.push(["Index", "ID", "Name", "Address", "Phone"].join(","));
-
-    // Add data rows
     data.forEach((row) => {
       const values = [row.index, row.id, row.name, row.address, row.phone];
       csvRows.push(values.join(","));
     });
-
-    // Create a blob from the CSV data
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-
-    // Create a link element and trigger download
     const a = document.createElement("a");
     a.href = url;
     a.download = "data.csv";
@@ -62,8 +66,9 @@ export default function DataTable({ seed, region, errorCount }) {
       <InfiniteScroll
         dataLength={data.length}
         next={() => {
-          setPage((prevPage) => prevPage + 1); // Increment page
-          fetchData();
+          const nextPage = page + 1;
+          setPage(nextPage);
+          fetchData(nextPage);
         }}
         hasMore={true}
         loader={<h4 className="text-center py-4 text-gray-500">Loading...</h4>}
@@ -76,10 +81,34 @@ export default function DataTable({ seed, region, errorCount }) {
           <div className="font-bold">Phone</div>
         </div>
 
+        {loading && (
+          <div className="text-center py-4">
+            <div className="loader"></div>
+            <style jsx>{`
+              .loader {
+                border: 6px solid #f3f3f3;
+                border-top: 6px solid #3498db;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                animation: spin 1s linear infinite;
+              }
+              @keyframes spin {
+                0% {
+                  transform: rotate(0deg);
+                }
+                100% {
+                  transform: rotate(360deg);
+                }
+              }
+            `}</style>
+          </div>
+        )}
+
         <div className="grid gap-4">
-          {data.map((row) => (
+          {data.map((row, index) => (
             <div
-              key={row.id}
+              key={`${row.id}-${index}`} // Ensure unique keys
               className="grid grid-cols-5 bg-white p-4 border-b border-gray-300 gap-2 hover:bg-gray-50"
             >
               <div className="break-words">{row.index}</div>

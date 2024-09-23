@@ -1,7 +1,6 @@
-import { faker } from "@faker-js/faker";
 import seedrandom from "seedrandom";
+import { faker } from "@faker-js/faker";
 
-// Error handling functions
 function deleteCharacter(str) {
   const index = Math.floor(Math.random() * str.length);
   return str.slice(0, index) + str.slice(index + 1);
@@ -30,26 +29,40 @@ function introduceErrors(data, errorCount, alphabet) {
   return data;
 }
 
-// Generate fake data with errors
 export function generateData(seed, page, region, errorCount) {
-  const rng = seedrandom(seed + page); // Combine seed with page number
-
+  const rng = seedrandom(seed);
   faker.seed(rng.int32());
 
-  const alphabet =
-    region === "USA"
-      ? "abcdefghijklmnopqrstuvwxyz"
-      : "abcdefghijklmnopqrstuvwxyz";
   const data = [];
+  const regionSpecificData = {
+    USA: {
+      alphabet: "abcdefghijklmnopqrstuvwxyz",
+      phoneFormat: "###-###-####",
+    },
+    Poland: {
+      alphabet: "ąćęłńóśźżabcdefghijklmnopqrstuvwxyz",
+      phoneFormat: "+48 ### ### ###",
+    },
+    Georgia: {
+      alphabet: "abcdefghijklmnopqrstuvwxyz",
+      phoneFormat: "+995 ### ### ####",
+    },
+  };
+
+  const { alphabet, phoneFormat } =
+    regionSpecificData[region] || regionSpecificData.USA;
+
+  // Calculate the starting index based on the page
+  const startIndex = (page - 1) * 20; // Adjust to start from 0 for the first page
 
   for (let i = 0; i < 20; i++) {
     const name = `${faker.person.firstName()} ${faker.person.middleName()} ${faker.person.lastName()}`;
     const address = `${faker.location.city()}, ${faker.location.streetAddress()}`;
-    const phone = faker.phone.number(); // Updated method
-    const id = faker.string.uuid(); // Updated method
+    const phone = faker.phone.number(phoneFormat);
+    const id = faker.string.uuid();
 
     data.push({
-      index: page * 20 + i + 1,
+      index: startIndex + i + 1, // Adjust index calculation
       id,
       name: introduceErrors(name, errorCount, alphabet),
       address: introduceErrors(address, errorCount, alphabet),
